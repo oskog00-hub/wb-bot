@@ -71,14 +71,16 @@ margin = (profit / cost * 100) if cost > 0 else 0
     margin = (profit / cost * 100) if cost > 0 else 0
 
     await message.answer(
-        f"📊 Результат:\n\n"
-        f"Цена: {price:.0f} ₽\n"
-        f"Себестоимость: {cost:.0f} ₽\n\n"
-        f"Комиссия WB: {commission:.0f} ₽\n"
-        f"Эквайринг: {acquiring:.0f} ₽\n"
-        f"Логистика: {logistics:.0f} ₽\n\n"
-        f"💰 Чистая прибыль: {profit:.0f} ₽\n"
-        f"📈 Маржа: {margin:.1f}%"
+       await message.answer(
+    f"📊 Расчет прибыли WB\n\n"
+    f"💰 Цена продажи: {price:.0f} ₽\n"
+    f"📦 Себестоимость: {cost:.0f} ₽\n\n"
+    f"Комиссия WB: {commission:.0f} ₽\n"
+    f"Эквайринг: {acquiring:.0f} ₽\n"
+    f"Налог: {tax:.0f} ₽\n"
+    f"Логистика: {logistics:.0f} ₽\n\n"
+    f"🔥 Чистая прибыль: {profit:.0f} ₽\n"
+    f"📈 Маржа: {margin:.1f}%"
     )
 
     await state.clear()
@@ -91,4 +93,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
