@@ -60,8 +60,12 @@ async def get_cost(message: types.Message, state: FSMContext):
 
     # ===== расчёт =====
     commission = price * 0.15
-    acquiring = price * 0.02
-    logistics = 120
+acquiring = price * 0.02
+tax = price * 0.06
+logistics = 150
+
+profit = price - commission - acquiring - tax - logistics - cost
+margin = (profit / cost * 100) if cost > 0 else 0
 
     profit = price - commission - acquiring - logistics - cost
     margin = (profit / cost * 100) if cost > 0 else 0
@@ -87,3 +91,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
