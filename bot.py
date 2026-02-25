@@ -4,22 +4,22 @@ import aiosqlite
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
-# ===== ТОКЕН =====
+# ===== ПОЛУЧАЕМ TOKEN ИЗ RAILWAY =====
 
 TOKEN = os.environ.get("TOKEN")
 
-if not TOKEN:
-print("TOKEN НЕ НАЙДЕН В RAILWAY")
+if TOKEN is None:
+print("❌ TOKEN не найден в Railway")
 exit()
 
-print("TOKEN OK")
+print("✅ TOKEN найден")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 DB = "users.db"
 
-# ===== БАЗА =====
+# ===== СОЗДАНИЕ БАЗЫ =====
 
 async def init_db():
 async with aiosqlite.connect(DB) as db:
@@ -34,25 +34,20 @@ await db.commit()
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
-await message.answer("WB бот работает 24/7 🚀")
+await message.answer("🚀 WB бот работает 24/7")
 
-# ===== ТЕСТ =====
+# ===== ПРОСТОЙ ОТВЕТ =====
 
 @dp.message()
 async def echo(message: types.Message):
-await message.answer("Работаю.")
+await message.answer("Бот онлайн и работает.")
 
 # ===== ЗАПУСК =====
 
 async def main():
-print("БОТ ЗАПУСКАЕТСЯ...")
+print("🚀 Бот запускается...")
 await init_db()
 await dp.start_polling(bot)
 
 if **name** == "**main**":
 asyncio.run(main())
-
-
-
-
-
