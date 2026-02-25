@@ -19,68 +19,62 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 
-# ===== FSM =====
-class CalcState(StatesGroup):
-    waiting_price = State()
-    waiting_cost = State()
+# ===== Состояния =====
+class Calc(StatesGroup):
+    price = State()
+    cost = State()
 
 
-# ===== /start =====
+# ===== START =====
 @dp.message(Command("start"))
-async def start(message: types.Message):
-    await message.answer(
-        "Введите цену продажи товара (₽):"
-    )
-    await dp.fsm.set_state(message.from_user.id, CalcState.waiting_price)
+async def start(message: types.Message, state: FSMContext):
+    await state.set_state(Calc.price)
+    await message.answer("💰 Введите цену продажи товара (₽)")
 
 
-# ===== Получаем цену =====
-@dp.message(CalcState.waiting_price)
+# ===== Цена =====
+@dp.message(Calc.price)
 async def get_price(message: types.Message, state: FSMContext):
     try:
         price = float(message.text.replace(",", "."))
     except:
-        await message.answer("Введите число.")
+        await message.answer("Введите число, например 1990")
         return
 
     await state.update_data(price=price)
-    await message.answer("Введите себестоимость товара (₽):")
-    await state.set_state(CalcState.waiting_cost)
+    await state.set_state(Calc.cost)
+    await message.answer("📦 Теперь введите себестоимость товара (₽)")
 
 
-# ===== Получаем себестоимость =====
-@dp.message(CalcState.waiting_cost)
+# ===== Себестоимость =====
+@dp.message(Calc.cost)
 async def get_cost(message: types.Message, state: FSMContext):
     try:
         cost = float(message.text.replace(",", "."))
     except:
-        await message.answer("Введите число.")
+        await message.answer("Введите число, например 800")
         return
 
     data = await state.get_data()
     price = data["price"]
 
-    # --- расчёт ---
+    # ===== расчёт =====
     commission = price * 0.15
     acquiring = price * 0.02
     logistics = 120
 
     profit = price - commission - acquiring - logistics - cost
-
-    if cost > 0:
-        margin = (profit / cost) * 100
-    else:
-        margin = 0
+    margin = (profit / cost * 100) if cost > 0 else 0
 
     await message.answer(
         f"📊 Результат:\n\n"
-        f"Цена: {price:.2f} ₽\n"
-        f"Себестоимость: {cost:.2f} ₽\n\n"
-        f"Комиссия WB: {commission:.2f} ₽\n"
-        f"Эквайринг: {acquiring:.2f} ₽\n"
-        f"Логистика: {logistics:.2f} ₽\n\n"
-        f"💰 Чистая прибыль: {profit:.2f} ₽\n"
-        f"📈 Маржинальность: {margin:.2f} %"
+        f"Цена: {price:.0f} ₽\n"
+        f"Себестоимость: {cost:.0f} ₽\n\n"
+        f"Комиссия WB: {commission:.0f} ₽\n"
+        f"Эквайринг: {acquiring:.0f} ₽\n"
+        f"Логистика: {logistics:.0f} ₽\n\n"
+        f"💰 Чистая прибыль: {profit:.0f} ₽\n"
+        f"📈 Маржа: {margin:.1f}%"
     )
 
     await state.clear()
