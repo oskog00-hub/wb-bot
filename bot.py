@@ -1,10 +1,12 @@
-﻿import asyncio
+import os
+print("ENV TOKEN:", os.getenv("TOKEN"))
+import asyncio
 from aiogram import Bot, Dispatcher, types
 import aiosqlite
 import datetime
 
 import os
-
+TOKEN = os.getenv("TOKEN")
 DB = "users.db"
 
 bot = Bot(token=TOKEN)
@@ -105,4 +107,5 @@ async def main():
 
 
 asyncio.run(main())
+
 
