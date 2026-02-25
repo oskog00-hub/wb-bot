@@ -6,7 +6,10 @@ import aiosqlite
 import datetime
 
 import os
-TOKEN = os.getenv("TOKEN")
+import os
+
+TOKEN = os.environ.get("TOKEN")
+print("DEBUG TOKEN =", TOKEN)
 DB = "users.db"
 
 bot = Bot(token=TOKEN)
@@ -107,5 +110,6 @@ async def main():
 
 
 asyncio.run(main())
+
 
 
