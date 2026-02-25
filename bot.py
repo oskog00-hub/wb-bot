@@ -3,7 +3,8 @@ from aiogram import Bot, Dispatcher, types
 import aiosqlite
 import datetime
 
-TOKEN = "8447074702:AAEsXCPybnRr7wAsM2PGUn8aqCJimVcbIOM"
+import os
+TOKEN = os.getenv("TOKEN")
 DB = "users.db"
 
 bot = Bot(token=TOKEN)
@@ -101,5 +102,6 @@ async def calc(message: types.Message):
 async def main():
     await init_db()
     await dp.start_polling(bot)
+
 
 asyncio.run(main())
