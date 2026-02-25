@@ -188,10 +188,14 @@ async def get_commission(message: types.Message, state: FSMContext):
 @dp.message(lambda message: message.text and "хочу" in message.text.lower())
 async def want_pro(message: types.Message):
     await message.answer(
-        "💎 PRO доступ\n"
-        "Напиши администратору для подключения."
+        "💎 PRO доступ — 490₽ / месяц\n\n"
+        "Что входит:\n"
+        "• Безлимитные расчёты\n"
+        "• Точка безубыточности\n"
+        "• Расширенная аналитика\n"
+        "• Приоритетная поддержка\n\n"
+        "Для подключения напишите: ОПЛАТА"
     )
-
 
 # ---------- ЗАПУСК ----------
 async def main():
@@ -200,3 +204,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
