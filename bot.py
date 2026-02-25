@@ -23,6 +23,7 @@ dp = Dispatcher(storage=MemoryStorage())
 class Calc(StatesGroup):
     price = State()
     cost = State()
+    commission = State()
 
 
 # ===== START =====
@@ -43,7 +44,7 @@ async def get_price(message: types.Message, state: FSMContext):
 
     await state.update_data(price=price)
     await state.set_state(Calc.cost)
-    await message.answer("📦 Теперь введите себестоимость товара (₽)")
+    await message.answer("📦 Введите себестоимость товара (₽)")
 
 
 # ===== Себестоимость =====
@@ -55,11 +56,26 @@ async def get_cost(message: types.Message, state: FSMContext):
         await message.answer("Введите число, например 800")
         return
 
+    await state.update_data(cost=cost)
+    await state.set_state(Calc.commission)
+    await message.answer("📊 Введите комиссию WB (%) для вашей категории\nНапример: 18")
+
+
+# ===== Комиссия =====
+@dp.message(Calc.commission)
+async def get_commission(message: types.Message, state: FSMContext):
+    try:
+        commission_percent = float(message.text.replace(",", "."))
+    except:
+        await message.answer("Введите число, например 18")
+        return
+
     data = await state.get_data()
     price = data["price"]
+    cost = data["cost"]
 
-    # ===== РЕАЛИСТИЧНЫЙ РАСЧЁТ WB =====
-    commission = price * 0.15
+    # ===== Реальный расчет =====
+    commission = price * (commission_percent / 100)
     acquiring = price * 0.02
     tax = price * 0.06
     logistics = 150
@@ -69,11 +85,12 @@ async def get_cost(message: types.Message, state: FSMContext):
 
     await message.answer(
         f"📊 Расчет прибыли WB\n\n"
-        f"💰 Цена продажи: {price:.0f} ₽\n"
-        f"📦 Себестоимость: {cost:.0f} ₽\n\n"
-        f"Комиссия WB (15%): {commission:.0f} ₽\n"
-        f"Эквайринг (2%): {acquiring:.0f} ₽\n"
-        f"Налог (6%): {tax:.0f} ₽\n"
+        f"💰 Цена: {price:.0f} ₽\n"
+        f"📦 Себестоимость: {cost:.0f} ₽\n"
+        f"📈 Комиссия категории: {commission_percent:.1f}%\n\n"
+        f"Комиссия WB: {commission:.0f} ₽\n"
+        f"Эквайринг: {acquiring:.0f} ₽\n"
+        f"Налог: {tax:.0f} ₽\n"
         f"Логистика: {logistics:.0f} ₽\n\n"
         f"🔥 Чистая прибыль: {profit:.0f} ₽\n"
         f"📈 Маржа: {margin:.1f}%"
