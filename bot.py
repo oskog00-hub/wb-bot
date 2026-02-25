@@ -58,26 +58,25 @@ async def get_cost(message: types.Message, state: FSMContext):
     data = await state.get_data()
     price = data["price"]
 
-    # ===== расчёт =====
+    # ===== РЕАЛИСТИЧНЫЙ РАСЧЁТ WB =====
     commission = price * 0.15
     acquiring = price * 0.02
     tax = price * 0.06
     logistics = 150
 
-profit = price - commission - acquiring - tax - logistics - cost
-margin = (profit / cost * 100) if cost > 0 else 0
+    profit = price - commission - acquiring - tax - logistics - cost
+    margin = (profit / cost * 100) if cost > 0 else 0
 
-     await message.answer(
-       await message.answer(
-    f"📊 Расчет прибыли WB\n\n"
-    f"💰 Цена продажи: {price:.0f} ₽\n"
-    f"📦 Себестоимость: {cost:.0f} ₽\n\n"
-    f"Комиссия WB: {commission:.0f} ₽\n"
-    f"Эквайринг: {acquiring:.0f} ₽\n"
-    f"Налог: {tax:.0f} ₽\n"
-    f"Логистика: {logistics:.0f} ₽\n\n"
-    f"🔥 Чистая прибыль: {profit:.0f} ₽\n"
-    f"📈 Маржа: {margin:.1f}%"
+    await message.answer(
+        f"📊 Расчет прибыли WB\n\n"
+        f"💰 Цена продажи: {price:.0f} ₽\n"
+        f"📦 Себестоимость: {cost:.0f} ₽\n\n"
+        f"Комиссия WB (15%): {commission:.0f} ₽\n"
+        f"Эквайринг (2%): {acquiring:.0f} ₽\n"
+        f"Налог (6%): {tax:.0f} ₽\n"
+        f"Логистика: {logistics:.0f} ₽\n\n"
+        f"🔥 Чистая прибыль: {profit:.0f} ₽\n"
+        f"📈 Маржа: {margin:.1f}%"
     )
 
     await state.clear()
@@ -90,6 +89,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
