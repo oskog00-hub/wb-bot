@@ -6,6 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
+# ===== TOKEN =====
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
@@ -18,63 +19,59 @@ print("BOT STARTING...")
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-
 # ===== Состояния =====
 class Calc(StatesGroup):
     price = State()
     cost = State()
     commission = State()
 
-
 # ===== START =====
 @dp.message(Command("start"))
-async def start(message: types.Message, state: FSMContext):
+async def start_handler(message: types.Message, state: FSMContext):
+    await state.clear()
     await state.set_state(Calc.price)
     await message.answer("💰 Введите цену продажи товара (₽)")
 
-
-# ===== Цена =====
+# ===== Получаем цену =====
 @dp.message(Calc.price)
 async def get_price(message: types.Message, state: FSMContext):
     try:
         price = float(message.text.replace(",", "."))
     except:
-        await message.answer("Введите число, например 1990")
+        await message.answer("Введите корректное число, например: 1990")
         return
 
     await state.update_data(price=price)
     await state.set_state(Calc.cost)
     await message.answer("📦 Введите себестоимость товара (₽)")
 
-
-# ===== Себестоимость =====
+# ===== Получаем себестоимость =====
 @dp.message(Calc.cost)
 async def get_cost(message: types.Message, state: FSMContext):
     try:
         cost = float(message.text.replace(",", "."))
     except:
-        await message.answer("Введите число, например 800")
+        await message.answer("Введите корректное число, например: 800")
         return
 
     await state.update_data(cost=cost)
     await state.set_state(Calc.commission)
     await message.answer("📊 Введите комиссию WB (%) для вашей категории\nНапример: 18")
 
-
-# ===== Комиссия =====
+# ===== Получаем комиссию и считаем =====
 @dp.message(Calc.commission)
 async def get_commission(message: types.Message, state: FSMContext):
     try:
         commission_percent = float(message.text.replace(",", "."))
     except:
-        await message.answer("Введите число, например 18")
+        await message.answer("Введите корректное число, например: 18")
         return
 
     data = await state.get_data()
     price = data["price"]
     cost = data["cost"]
 
-    # ===== Реальный расчет =====
+    # ===== Расчёт =====
     commission = price * (commission_percent / 100)
     acquiring = price * 0.02
     tax = price * 0.06
@@ -83,6 +80,15 @@ async def get_commission(message: types.Message, state: FSMContext):
     profit = price - commission - acquiring - tax - logistics - cost
     margin = (profit / cost * 100) if cost > 0 else 0
 
+    # ===== Точка безубыточности =====
+    total_percent = commission_percent / 100 + 0.08  # комиссия + 8% (эквайринг + налог)
+
+    if total_percent < 1:
+        break_even = (cost + logistics) / (1 - total_percent)
+    else:
+        break_even = 0
+
+    # ===== Ответ =====
     await message.answer(
         f"📊 Расчет прибыли WB\n\n"
         f"💰 Цена: {price:.0f} ₽\n"
@@ -93,16 +99,15 @@ async def get_commission(message: types.Message, state: FSMContext):
         f"Налог: {tax:.0f} ₽\n"
         f"Логистика: {logistics:.0f} ₽\n\n"
         f"🔥 Чистая прибыль: {profit:.0f} ₽\n"
-        f"📈 Маржа: {margin:.1f}%"
+        f"📈 Маржа: {margin:.1f}%\n\n"
+        f"⚖️ Точка безубыточности: {break_even:.0f} ₽"
     )
 
     await state.clear()
 
-
 # ===== Запуск =====
 async def main():
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
