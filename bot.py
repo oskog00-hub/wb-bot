@@ -4,7 +4,7 @@ import uuid
 import aiosqlite
 from datetime import date
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
@@ -12,75 +12,61 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from yookassa import Configuration, Payment
 
-
-# ---------------- НАСТРОЙКИ ----------------
-
+# ---------- ENV ----------
 TOKEN = os.getenv("TOKEN")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET = os.getenv("YOOKASSA_SECRET")
 
 if not TOKEN:
-    print("TOKEN NOT FOUND")
+    print("❌ TOKEN NOT FOUND")
     exit()
 
-print("BOT STARTED")
+print("✅ TOKEN OK")
 
 Configuration.account_id = YOOKASSA_SHOP_ID
 Configuration.secret_key = YOOKASSA_SECRET
 
+# ---------- BOT ----------
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 DB = "bot.db"
-FREE_LIMIT = 5  # бесплатных расчетов
+FREE_LIMIT = 5
 
+# ---------- FSM ----------
+class Calc(StatesGroup):
+    price = State()
+    cost = State()
+    commission = State()
 
-# ---------------- БАЗА ----------------
-
+# ---------- DB ----------
 async def init_db():
     async with aiosqlite.connect(DB) as db:
-
         await db.execute("""
-        CREATE TABLE IF NOT EXISTS users(
+        CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             pro INTEGER DEFAULT 0
         )
         """)
-
         await db.execute("""
-        CREATE TABLE IF NOT EXISTS usage(
+        CREATE TABLE IF NOT EXISTS usage (
             user_id INTEGER,
             calc_date TEXT,
             count INTEGER DEFAULT 0,
             PRIMARY KEY (user_id, calc_date)
         )
         """)
-
         await db.commit()
 
-
-# ---------------- FSM ----------------
-
-class Calc(StatesGroup):
-    price = State()
-    cost = State()
-    commission = State()
-
-
-# ---------------- ПРОВЕРКА ЛИМИТА ----------------
-
-async def check_limit(user_id):
-
+# ---------- LIMIT ----------
+async def check_limit(user_id: int) -> bool:
     async with aiosqlite.connect(DB) as db:
-
         cur = await db.execute("SELECT pro FROM users WHERE user_id=?", (user_id,))
         row = await cur.fetchone()
-
         if row and row[0] == 1:
             return True
 
         today = str(date.today())
-
         cur = await db.execute(
             "SELECT count FROM usage WHERE user_id=? AND calc_date=?",
             (user_id, today)
@@ -105,16 +91,15 @@ async def check_limit(user_id):
         await db.commit()
         return True
 
-
-# ---------------- START ----------------
-
+# ---------- START ----------
 @dp.message(Command("start"))
 async def start(message: types.Message, state: FSMContext):
-
     user_id = message.from_user.id
-
     async with aiosqlite.connect(DB) as db:
-        await db.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
+        await db.execute(
+            "INSERT OR IGNORE INTO users (user_id) VALUES (?)",
+            (user_id,)
+        )
         await db.commit()
 
     await state.clear()
@@ -122,12 +107,14 @@ async def start(message: types.Message, state: FSMContext):
 
     await message.answer(
         "💰 WB Калькулятор прибыли\n\n"
-        "Введи цену продажи товара (₽)"
+        "Я помогу:\n"
+        "• Посчитать прибыль\n"
+        "• Маржу\n"
+        "• Точку безубыточности\n\n"
+        "Введите цену продажи товара (₽)"
     )
 
-
-# ---------------- ЦЕНА ----------------
-
+# ---------- PRICE ----------
 @dp.message(Calc.price)
 async def get_price(message: types.Message, state: FSMContext):
     try:
@@ -140,9 +127,7 @@ async def get_price(message: types.Message, state: FSMContext):
     await state.set_state(Calc.cost)
     await message.answer("📦 Введите себестоимость товара (₽)")
 
-
-# ---------------- СЕБЕСТОИМОСТЬ ----------------
-
+# ---------- COST ----------
 @dp.message(Calc.cost)
 async def get_cost(message: types.Message, state: FSMContext):
     try:
@@ -155,22 +140,19 @@ async def get_cost(message: types.Message, state: FSMContext):
     await state.set_state(Calc.commission)
     await message.answer("📊 Введите комиссию WB (%)")
 
-
-# ---------------- РАСЧЕТ ----------------
-
+# ---------- CALC ----------
 @dp.message(Calc.commission)
 async def calc(message: types.Message, state: FSMContext):
-
     user_id = message.from_user.id
-    allowed = await check_limit(user_id)
 
+    allowed = await check_limit(user_id)
     if not allowed:
+        await state.clear()
         await message.answer(
-            "⛔ Лимит бесплатных расчетов (5/день) исчерпан\n\n"
+            "⛔ Лимит бесплатных расчётов (3/день) исчерпан\n\n"
             "Хочешь PRO без лимита?\n"
             "Напиши: ХОЧУ PRO"
         )
-        await state.clear()
         return
 
     try:
@@ -192,86 +174,55 @@ async def calc(message: types.Message, state: FSMContext):
     margin = (profit / cost * 100) if cost > 0 else 0
 
     total_percent = commission_percent / 100 + 0.08
-    break_even = (cost + logistics) / (1 - total_percent) if total_percent < 1 else 0
+    break_even = (cost + logistics) / (1 - total_percent)
 
     await message.answer(
-        f"📊 Расчет WB\n\n"
-        f"💰 Прибыль: {profit:.0f} ₽\n"
-        f"📈 Маржа: {margin:.1f}%\n"
+        f"📈 Расчёт WB\n\n"
+        f"🔥 Прибыль: {profit:.0f} ₽\n"
+        f"📊 Маржа: {margin:.1f}%\n"
         f"⚖️ Точка 0: {break_even:.0f} ₽"
     )
 
     await state.clear()
 
+# ---------- WANT PRO ----------
+@dp.message(F.text.casefold() == "хочу pro")
+async def want_pro(message: types.Message):
+    await message.answer(
+        "💎 PRO доступ — 490 ₽ / месяц\n\n"
+        "Что входит:\n"
+        "• Безлимитные расчёты\n"
+        "• Точка безубыточности\n"
+        "• Приоритетная поддержка\n\n"
+        "Для оплаты напиши:\n👉 ОПЛАТА"
+    )
 
-# ---------------- ХОЧУ PRO ----------------
-
-from aiogram import F
-
+# ---------- PAYMENT ----------
 @dp.message(F.text.casefold() == "оплата")
 async def buy_pro(message: types.Message):
-
-    payment = Payment.create({
-        "amount": {"value": "490.00", "currency": "RUB"},
-        "confirmation": {
-            "type": "redirect",
-            "return_url": "https://t.me/wbmarging_bot"
+    payment = Payment.create(
+        {
+            "amount": {"value": "490.00", "currency": "RUB"},
+            "confirmation": {
+                "type": "redirect",
+                "return_url": "https://t.me/"
+            },
+            "capture": True,
+            "description": "PRO доступ к WB калькулятору"
         },
-        "capture": True,
-        "description": "PRO доступ к WB боту"
-    }, str(uuid.uuid4()))
-
-    url = payment.confirmation.confirmation_url
-
-    await message.answer(
-        f"💳 Оплатить PRO:\n\n{url}\n\n"
-        "После оплаты напиши: ОПЛАТИЛ"
+        str(uuid.uuid4())
     )
 
-
-# ---------------- ОПЛАТА ----------------
-
-@dp.message(lambda m: m.text and "ОПЛАТА" in m.text.upper())
-async def buy_pro(message: types.Message):
-
-    payment = Payment.create({
-        "amount": {"value": "490.00", "currency": "RUB"},
-        "confirmation": {
-            "type": "redirect",
-            "return_url": "https://t.me/wbmarging_bot"
-        },
-        "capture": True,
-        "description": "PRO доступ к WB боту"
-    }, str(uuid.uuid4()))
-
-    url = payment.confirmation.confirmation_url
-
     await message.answer(
-        f"💳 Оплатить PRO:\n\n{url}\n\n"
-        "После оплаты напиши: ОПЛАТИЛ"
+        f"💳 Оплатить PRO доступ:\n{payment.confirmation.confirmation_url}\n\n"
+        "После оплаты доступ включится автоматически."
     )
 
-
-# ---------------- АКТИВАЦИЯ PRO ----------------
-
-@dp.message(lambda m: m.text and "ОПЛАТИЛ" in m.text.upper())
-async def activate_pro(message: types.Message):
-
-    user_id = message.from_user.id
-
-    async with aiosqlite.connect(DB) as db:
-        await db.execute("UPDATE users SET pro=1 WHERE user_id=?", (user_id,))
-        await db.commit()
-
-    await message.answer("🔥 PRO активирован! Безлимит включен.")
-
-
-# ---------------- ЗАПУСК ----------------
-
+# ---------- RUN ----------
 async def main():
     await init_db()
+    print("🚀 BOT STARTED")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
