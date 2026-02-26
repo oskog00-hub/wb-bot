@@ -30,8 +30,8 @@ YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET = os.getenv("YOOKASSA_SECRET")
 
 if not TOKEN:
-print("❌ TOKEN NOT FOUND")
-exit()
+    print("❌ TOKEN NOT FOUND")
+    exit()
 
 print("✅ TOKEN OK")
 
@@ -174,7 +174,7 @@ allowed = await check_limit(user_id)
 
 if not allowed:
     await message.answer(
-        "⛔ Лимит бесплатных расчетов (5/день) исчерпан\n\n"
+        "⛔ Лимит бесплатных расчетов (3/день) исчерпан\n\n"
         "Хочешь PRO без лимита?\nНапиши: ХОЧУ PRO"
     )
     await state.clear()
@@ -284,4 +284,5 @@ if **name** == "**main**":
 loop = asyncio.get_event_loop()
 loop.create_task(start_bot())
 uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
