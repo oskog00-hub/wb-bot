@@ -206,13 +206,26 @@ async def calc(message: types.Message, state: FSMContext):
 
 # ---------------- ХОЧУ PRO ----------------
 
-@dp.message(lambda m: m.text and "ХОЧУ PRO" in m.text.upper())
-async def want_pro(message: types.Message):
+from aiogram import F
+
+@dp.message(F.text.casefold() == "оплата")
+async def buy_pro(message: types.Message):
+
+    payment = Payment.create({
+        "amount": {"value": "490.00", "currency": "RUB"},
+        "confirmation": {
+            "type": "redirect",
+            "return_url": "https://t.me/wbmarging_bot"
+        },
+        "capture": True,
+        "description": "PRO доступ к WB боту"
+    }, str(uuid.uuid4()))
+
+    url = payment.confirmation.confirmation_url
+
     await message.answer(
-        "💎 PRO доступ — 490₽/месяц\n\n"
-        "Безлимитные расчеты\n"
-        "Точка безубыточности\n\n"
-        "Напиши: ОПЛАТА"
+        f"💳 Оплатить PRO:\n\n{url}\n\n"
+        "После оплаты напиши: ОПЛАТИЛ"
     )
 
 
@@ -261,3 +274,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
