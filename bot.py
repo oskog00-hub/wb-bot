@@ -104,6 +104,28 @@ async def start(message: types.Message, state: FSMContext):
     await state.set_state(Calc.price)
 
     await message.answer(
+        "📊 WB Аналитика и расчет прибыли\n\n"
+        "Этот бот помогает продавцам Wildberries:\n"
+        "• считать чистую прибыль\n"
+        "• находить точку безубыточности\n"
+        "• анализировать товары\n"
+        "• оценивать вход в нишу\n\n"
+        "Введите цену продажи товара (₽)\n"
+        "или отправьте артикул WB"
+    )
+    user_id = message.from_user.id
+
+    async with aiosqlite.connect(DB) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO users (user_id) VALUES (?)",
+            (user_id,)
+        )
+        await db.commit()
+
+    await state.clear()
+    await state.set_state(Calc.price)
+
+    await message.answer(
         "💰 WB Калькулятор прибыли\n\n"
         "Введите цену продажи товара (₽)"
     )
@@ -204,4 +226,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
