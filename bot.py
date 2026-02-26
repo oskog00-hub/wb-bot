@@ -177,7 +177,7 @@ async def get_commission(message: types.Message, state: FSMContext):
 
     if not allowed:
         await message.answer(
-            "⛔ Лимит бесплатных расчетов (5/день) исчерпан\n\n"
+            "⛔ Лимит бесплатных расчетов (3/день) исчерпан\n\n"
             "Хочешь PRO без ограничений — напиши:\n"
             "👉 ХОЧУ PRO"
         )
@@ -227,14 +227,31 @@ async def want_pro(message: types.Message):
         "• Приоритетная поддержка\n\n"
         "Для подключения напишите: ОПЛАТА"
     )
+# ----------- ОПЛАТА PRO -----------
 
+@dp.message(lambda message: message.text and "ХОЧУ PRO" in message.text.upper())
+async def buy_pro(message: types.Message):
+
+    payment = Payment.create({
+        "amount": {
+            "value": "490.00",
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": "https://t.me/wbmarging_bot"
+        },
+        "capture": True,
+        "description": "PRO доступ к WB боту"
+    }, str(uuid.uuid4()))
+
+    url = payment.confirmation.confirmation_url
+
+    await message.answer(
+        f"💳 Оплатить PRO доступ:\n\n{url}\n\n"
+        "После оплаты доступ включится автоматически."
+    )
 # ---------- ЗАПУСК ----------
 async def main():
     await init_db()
     await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-
-
