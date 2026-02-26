@@ -12,42 +12,26 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from yookassa import Configuration, Payment
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import uvicorn
-
-# ================= TOKENS =================
+# ===== ENV =====
 
 TOKEN = os.getenv("TOKEN")
-
-if not TOKEN:
-    print("🚀 BOT START")
-    exit()
-
-print("✅ TOKEN OK")
-print("🚀 BOT STARTED")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET = os.getenv("YOOKASSA_SECRET")
 
-if not TOKEN:
-    print("❌ TOKEN NOT FOUND")
-    exit()
+print("🚀 BOT START")
 
-print("✅ TOKEN OK")
+# ===== YOOKASSA =====
 
 Configuration.account_id = YOOKASSA_SHOP_ID
 Configuration.secret_key = YOOKASSA_SECRET
 
-# ================= BOT =================
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-app = FastAPI()
 
 DB = "bot.db"
 FREE_LIMIT = 5
 
-# ================= DATABASE =================
+# ===== DB =====
 
 async def init_db():
 async with aiosqlite.connect(DB) as db:
@@ -67,14 +51,14 @@ PRIMARY KEY(user_id, calc_date)
 """)
 await db.commit()
 
-# ================= FSM =================
+# ===== FSM =====
 
 class Calc(StatesGroup):
 price = State()
 cost = State()
 commission = State()
 
-# ================= LIMIT =================
+# ===== LIMIT =====
 
 async def check_limit(user_id):
 async with aiosqlite.connect(DB) as db:
@@ -111,7 +95,7 @@ row = await cur.fetchone()
     return True
 ```
 
-# ================= START =================
+# ===== START =====
 
 @dp.message(Command("start"))
 async def start(message: types.Message, state: FSMContext):
@@ -122,16 +106,11 @@ async with aiosqlite.connect(DB) as db:
     await db.execute("INSERT OR IGNORE INTO users(user_id) VALUES(?)", (user_id,))
     await db.commit()
 
-await state.clear()
 await state.set_state(Calc.price)
-
-await message.answer(
-    "💰 WB Калькулятор прибыли\n\n"
-    "Введи цену продажи товара (₽)"
-)
+await message.answer("💰 Введи цену продажи товара (₽)")
 ```
 
-# ================= PRICE =================
+# ===== PRICE =====
 
 @dp.message(Calc.price)
 async def get_price(message: types.Message, state: FSMContext):
@@ -144,10 +123,10 @@ return
 ```
 await state.update_data(price=price)
 await state.set_state(Calc.cost)
-await message.answer("📦 Введи себестоимость товара (₽)")
+await message.answer("📦 Себестоимость товара (₽)")
 ```
 
-# ================= COST =================
+# ===== COST =====
 
 @dp.message(Calc.cost)
 async def get_cost(message: types.Message, state: FSMContext):
@@ -160,22 +139,21 @@ return
 ```
 await state.update_data(cost=cost)
 await state.set_state(Calc.commission)
-await message.answer("📊 Введи комиссию WB (%)")
+await message.answer("📊 Комиссия WB (%)")
 ```
 
-# ================= CALC =================
+# ===== CALC =====
 
 @dp.message(Calc.commission)
 async def get_commission(message: types.Message, state: FSMContext):
 user_id = message.from_user.id
-
-```
 allowed = await check_limit(user_id)
 
+```
 if not allowed:
     await message.answer(
-        "⛔ Лимит бесплатных расчетов (3/день) исчерпан\n\n"
-        "Хочешь PRO без лимита?\nНапиши: ХОЧУ PRO"
+        "⛔ Лимит 5 расчетов в день.\n\n"
+        "Напиши: ХОЧУ PRO"
     )
     await state.clear()
     return
@@ -198,92 +176,51 @@ logistics = 150
 profit = price - commission - acquiring - tax - logistics - cost
 margin = (profit / cost * 100) if cost > 0 else 0
 
-total_percent = commission_percent/100 + 0.08
-break_even = (cost + logistics) / (1 - total_percent) if total_percent < 1 else 0
-
 await message.answer(
-    f"📊 Расчет WB\n\n"
-    f"🔥 Прибыль: {profit:.0f} ₽\n"
-    f"📈 Маржа: {margin:.1f}%\n"
-    f"⚖️ Точка 0: {break_even:.0f} ₽"
+    f"💰 Прибыль: {profit:.0f} ₽\n"
+    f"📈 Маржа: {margin:.1f}%"
 )
 
 await state.clear()
 ```
 
-# ================= WANT PRO =================
+# ===== WANT PRO =====
 
 @dp.message(lambda m: "хочу" in m.text.lower())
 async def want_pro(message: types.Message):
 await message.answer(
-"💎 PRO доступ — 490₽/месяц\n\n"
-"Безлимитные расчеты\n"
-"Точка безубыточности\n\n"
+"💎 PRO доступ 490₽\n\n"
 "Напиши: ОПЛАТА"
 )
 
-# ================= PAYMENT =================
+# ===== PAYMENT =====
 
 @dp.message(lambda m: "оплата" in m.text.lower())
 async def buy_pro(message: types.Message):
 
 ```
 payment = Payment.create({
-    "amount": {
-        "value": "490.00",
-        "currency": "RUB"
-    },
+    "amount": {"value": "490.00", "currency": "RUB"},
     "confirmation": {
         "type": "redirect",
         "return_url": "https://t.me"
     },
     "capture": True,
-    "description": "PRO доступ к WB боту",
+    "description": "PRO доступ",
     "metadata": {
         "user_id": str(message.from_user.id)
     }
 }, str(uuid.uuid4()))
 
 url = payment.confirmation.confirmation_url
-
-await message.answer(
-    f"💳 Оплатить PRO:\n{url}\n\nПосле оплаты доступ включится автоматически"
-)
+await message.answer(f"💳 Оплата:\n{url}")
 ```
 
-# ================= YOOKASSA WEBHOOK =================
+# ===== RUN =====
 
-@app.post("/yookassa")
-async def yookassa_webhook(request: Request):
-data = await request.json()
-
-```
-if data.get("event") == "payment.succeeded":
-    payment = data.get("object", {})
-    user_id = payment.get("metadata", {}).get("user_id")
-
-    if user_id:
-        async with aiosqlite.connect(DB) as db:
-            await db.execute(
-                "UPDATE users SET pro=1 WHERE user_id=?",
-                (int(user_id),)
-            )
-            await db.commit()
-
-return JSONResponse({"ok": True})
-```
-
-# ================= RUN =================
-
-async def start_bot():
+async def main():
 await init_db()
-print("🚀 BOT STARTED")
 await dp.start_polling(bot)
 
 if **name** == "**main**":
-loop = asyncio.get_event_loop()
-loop.create_task(start_bot())
-uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
+asyncio.run(main())
