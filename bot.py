@@ -1,3 +1,12 @@
+from yookassa import Configuration, Payment
+import uuid
+import os
+
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
+YOOKASSA_SECRET = os.getenv("YOOKASSA_SECRET")
+
+Configuration.account_id = YOOKASSA_SHOP_ID
+Configuration.secret_key = YOOKASSA_SECRET
 import asyncio
 import os
 import aiosqlite
@@ -226,5 +235,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
