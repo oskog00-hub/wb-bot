@@ -19,6 +19,13 @@ import uvicorn
 # ================= TOKENS =================
 
 TOKEN = os.getenv("TOKEN")
+
+if not TOKEN:
+    print("❌ TOKEN NOT FOUND")
+    exit()
+
+print("✅ TOKEN OK")
+print("🚀 BOT STARTED")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET = os.getenv("YOOKASSA_SECRET")
 
@@ -277,3 +284,4 @@ if **name** == "**main**":
 loop = asyncio.get_event_loop()
 loop.create_task(start_bot())
 uvicorn.run(app, host="0.0.0.0", port=8000)
+
