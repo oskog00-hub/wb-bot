@@ -149,7 +149,7 @@ async def calc(message: types.Message, state: FSMContext):
     if not allowed:
         await state.clear()
         await message.answer(
-            "⛔ Лимит бесплатных расчётов (3/день) исчерпан\n\n"
+            "⛔ Лимит бесплатных расчётов (5/день) исчерпан\n\n"
             "Хочешь PRO без лимита?\n"
             "Напиши: ХОЧУ PRO"
         )
