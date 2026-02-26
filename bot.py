@@ -21,7 +21,7 @@ import uvicorn
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
-    print("❌ TOKEN NOT FOUND")
+    print("🚀 BOT START")
     exit()
 
 print("✅ TOKEN OK")
@@ -284,5 +284,6 @@ if **name** == "**main**":
 loop = asyncio.get_event_loop()
 loop.create_task(start_bot())
 uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
