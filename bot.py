@@ -4,6 +4,8 @@ from datetime import date
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 TOKEN = os.getenv("TOKEN")
 
@@ -15,9 +17,17 @@ dp = Dispatcher()
 
 FREE_LIMIT = 3  # 3 расчета в день бесплатно
 
-# user_id -> {
-#   step, pro, used_today, last_date, price, cost, commission_percent, ...
-# }
+# Категории и комиссии (%)
+CATEGORIES = {
+    "Одежда": 15,
+    "Обувь": 17,
+    "Электроника": 12,
+    "Дом": 10,
+    "Красота": 14,
+    "Другое": None  # если выбрано — ввод вручную
+}
+
+# user_id -> state dict
 users = {}
 
 
@@ -29,11 +39,19 @@ def ensure_user(user_id: int):
             "used_today": 0,
             "last_date": str(date.today()),
         }
-    # сброс счетчика при смене дня
+    # Сброс лимита при смене дня
     today = str(date.today())
     if users[user_id]["last_date"] != today:
         users[user_id]["used_today"] = 0
         users[user_id]["last_date"] = today
+
+
+def categories_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for name in CATEGORIES.keys():
+        builder.button(text=name, callback_data=f"cat:{name}")
+    builder.adjust(2)
+    return builder.as_markup()
 
 
 @dp.message(Command("start"))
@@ -53,7 +71,6 @@ async def start_handler(message: types.Message):
 async def enable_pro(message: types.Message):
     user_id = message.from_user.id
     ensure_user(user_id)
-
     users[user_id]["pro"] = True
     await message.answer("🔥 PRO режим включён (без лимита)")
 
@@ -87,37 +104,86 @@ async def calculator(message: types.Message):
             await message.answer("Введите число")
             return
 
-        user["step"] = "commission"
-        await message.answer("Введите комиссию WB (%):")
+        user["step"] = "category"
+        await message.answer(
+            "Выберите категорию товара:",
+            reply_markup=categories_keyboard()
+        )
         return
 
-    # 3️⃣ Комиссия
-    if step == "commission":
+    # 3️⃣ Если выбрана "Другое" — ввод комиссии вручную
+    if step == "manual_commission":
         try:
             user["commission_percent"] = float(message.text.replace(",", "."))
         except:
             await message.answer("Введите число")
             return
 
-        if is_pro:
-            user["step"] = "returns"
-            await message.answer("Введите % возвратов:")
-        else:
-            # проверяем лимит
-            if user["used_today"] >= FREE_LIMIT:
-                await message.answer(
-                    "⛔ Лимит бесплатных расчётов исчерпан.\n"
-                    "Используйте /pro для режима без ограничений."
-                )
-                user["step"] = "price"
-                return
-
-            user["used_today"] += 1
-            await calculate_and_reply(message, user_id)
-            user["step"] = "price"
+        await continue_after_commission(message, user_id)
         return
 
-    # 4️⃣ Возвраты (PRO)
+
+@dp.callback_query()
+async def category_chosen(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    ensure_user(user_id)
+
+    user = users[user_id]
+
+    if not callback.data.startswith("cat:"):
+        return
+
+    category_name = callback.data.split("cat:")[1]
+    commission = CATEGORIES.get(category_name)
+
+    await callback.answer()
+
+    if commission is None:
+        user["step"] = "manual_commission"
+        await callback.message.answer(
+            "Введите комиссию WB (%) вручную:"
+        )
+    else:
+        user["commission_percent"] = commission
+        await callback.message.answer(
+            f"Категория: {category_name}\n"
+            f"Комиссия WB: {commission}%"
+        )
+        await continue_after_commission(callback.message, user_id)
+
+
+async def continue_after_commission(message: types.Message, user_id: int):
+    user = users[user_id]
+    is_pro = user["pro"]
+
+    if is_pro:
+        user["step"] = "returns"
+        await message.answer("Введите % возвратов:")
+    else:
+        # Проверяем лимит
+        if user["used_today"] >= FREE_LIMIT:
+            await message.answer(
+                "⛔ Лимит бесплатных расчётов исчерпан.\n"
+                "Используйте /pro для режима без ограничений."
+            )
+            user["step"] = "price"
+            return
+
+        user["used_today"] += 1
+        await calculate_and_reply(message, user_id)
+        user["step"] = "price"
+
+
+@dp.message()
+async def pro_steps_handler(message: types.Message):
+    user_id = message.from_user.id
+    if user_id not in users:
+        return
+
+    user = users[user_id]
+    step = user["step"]
+
+    # Возвраты (PRO)
     if step == "returns":
         try:
             user["returns_percent"] = float(message.text.replace(",", "."))
@@ -129,7 +195,7 @@ async def calculator(message: types.Message):
         await message.answer("Введите ДРР рекламы (%):")
         return
 
-    # 5️⃣ Реклама (PRO)
+    # Реклама (PRO)
     if step == "ads":
         try:
             user["ads_percent"] = float(message.text.replace(",", "."))
