@@ -10,9 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from yookassa import Payment, Configuration
 
-# =======================
-# ENV
-# =======================
+# ================= ENV =================
 
 TOKEN = os.getenv("TOKEN")
 SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
@@ -35,9 +33,7 @@ PRO_PRICE = 490
 
 users = {}
 
-# =======================
-# HELPERS
-# =======================
+# ================= HELPERS =================
 
 def ensure_user(user_id):
     if user_id not in users:
@@ -45,6 +41,7 @@ def ensure_user(user_id):
             "pro": False,
             "used_today": 0,
             "last_date": str(date.today()),
+            "payment_id": None
         }
 
     today = str(date.today())
@@ -58,10 +55,7 @@ def pro_keyboard():
     kb.button(text="💳 Купить PRO", callback_data="buy_pro")
     return kb.as_markup()
 
-
-# =======================
-# START
-# =======================
+# ================= START =================
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
@@ -71,14 +65,11 @@ async def start_handler(message: types.Message):
     await message.answer(
         "📊 WB Калькулятор\n\n"
         "3 расчёта в день бесплатно\n"
-        "PRO — без ограничений + расширенная аналитика",
+        "PRO — без ограничений",
         reply_markup=pro_keyboard()
     )
 
-
-# =======================
-# BUY PRO
-# =======================
+# ================= BUY PRO =================
 
 @dp.callback_query(lambda c: c.data == "buy_pro")
 async def buy_pro(callback: types.CallbackQuery):
@@ -92,37 +83,35 @@ async def buy_pro(callback: types.CallbackQuery):
         },
         "confirmation": {
             "type": "redirect",
-            "return_url": "https://t.me/"  # можно оставить так
+            "return_url": "https://t.me/"
         },
         "capture": True,
-        "description": f"PRO доступ для пользователя {user_id}"
+        "description": f"PRO доступ {user_id}"
     }, uuid.uuid4())
 
     users[user_id]["payment_id"] = payment.id
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=payment.confirmation.confirmation_url)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data="check_payment")]
     ])
 
     await callback.message.answer(
-        f"🔥 PRO доступ — {PRO_PRICE} ₽\n\n"
+        f"🔥 PRO — {PRO_PRICE} ₽\n\n"
         "После оплаты нажмите «Я оплатил»",
-        reply_markup=kb
+        reply_markup=keyboard
     )
 
     await callback.answer()
 
-
-# =======================
-# CHECK PAYMENT
-# =======================
+# ================= CHECK PAYMENT =================
 
 @dp.callback_query(lambda c: c.data == "check_payment")
 async def check_payment(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    ensure_user(user_id)
 
-    payment_id = users[user_id].get("payment_id")
+    payment_id = users[user_id]["payment_id"]
 
     if not payment_id:
         await callback.answer("Платёж не найден", show_alert=True)
@@ -138,10 +127,7 @@ async def check_payment(callback: types.CallbackQuery):
 
     await callback.answer()
 
-
-# =======================
-# SIMPLE CALCULATION
-# =======================
+# ================= CALCULATOR =================
 
 @dp.message()
 async def calculator(message: types.Message):
@@ -153,7 +139,7 @@ async def calculator(message: types.Message):
     try:
         price = float(message.text.replace(",", "."))
     except:
-        await message.answer("Введите цену продажи числом")
+        await message.answer("Введите цену числом")
         return
 
     if not user["pro"]:
@@ -165,35 +151,28 @@ async def calculator(message: types.Message):
             return
         user["used_today"] += 1
 
-    cost = price * 0.7  # временно для примера
+    # Простейшая модель расчёта
+    cost = price * 0.7
     profit = price - cost
-    margin = profit / price * 100
+    margin = (profit / price) * 100
+
+    if user["pro"]:
+        status_text = "🔥 PRO режим"
+    else:
+        remaining = FREE_LIMIT - user["used_today"]
+        status_text = f"Осталось: {remaining}"
 
     await message.answer(
         f"💰 Прибыль: {profit:.0f} ₽\n"
         f"📈 Маржа: {margin:.1f}%\n\n"
-        if user["pro"]:
-    status_text = "🔥 PRO режим"
-else:
-    remaining = FREE_LIMIT - user["used_today"]
-    status_text = f"Осталось: {remaining}"
-
-await message.answer(
-    f"💰 Прибыль: {profit:.0f} ₽\n"
-    f"📈 Маржа: {margin:.1f}%\n\n"
-    f"{status_text}"
+        f"{status_text}"
     )
 
-
-# =======================
-# MAIN
-# =======================
+# ================= MAIN =================
 
 async def main():
     print("🚀 BOT STARTED")
     await dp.start_polling(bot)
 
-
 if __name__ == "__main__":
     asyncio.run(main())
-
