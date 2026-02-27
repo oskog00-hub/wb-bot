@@ -43,7 +43,7 @@ async def calculator(message: types.Message):
     step = users[user_id]["step"]
     is_pro = users[user_id]["pro"]
 
-    # 1️⃣ ЦЕНА
+    # Цена
     if step == "price":
         try:
             users[user_id]["price"] = float(message.text.replace(",", "."))
@@ -55,7 +55,7 @@ async def calculator(message: types.Message):
         await message.answer("Введите себестоимость (₽):")
         return
 
-    # 2️⃣ СЕБЕСТОИМОСТЬ
+    # Себестоимость
     if step == "cost":
         try:
             users[user_id]["cost"] = float(message.text.replace(",", "."))
@@ -67,7 +67,7 @@ async def calculator(message: types.Message):
         await message.answer("Введите комиссию WB (%):")
         return
 
-    # 3️⃣ КОМИССИЯ
+    # Комиссия
     if step == "commission":
         try:
             users[user_id]["commission_percent"] = float(message.text.replace(",", "."))
@@ -79,11 +79,11 @@ async def calculator(message: types.Message):
             users[user_id]["step"] = "returns"
             await message.answer("Введите % возвратов:")
         else:
-            calculate_and_reply(message, user_id)
+            await calculate_and_reply(message, user_id)
             users[user_id]["step"] = "price"
         return
 
-    # 4️⃣ ВОЗВРАТЫ (PRO)
+    # Возвраты (PRO)
     if step == "returns":
         try:
             users[user_id]["returns_percent"] = float(message.text.replace(",", "."))
@@ -95,7 +95,7 @@ async def calculator(message: types.Message):
         await message.answer("Введите ДРР рекламы (%):")
         return
 
-    # 5️⃣ РЕКЛАМА (PRO)
+    # Реклама (PRO)
     if step == "ads":
         try:
             users[user_id]["ads_percent"] = float(message.text.replace(",", "."))
@@ -103,11 +103,11 @@ async def calculator(message: types.Message):
             await message.answer("Введите число")
             return
 
-        calculate_and_reply(message, user_id)
+        await calculate_and_reply(message, user_id)
         users[user_id]["step"] = "price"
 
 
-def calculate_and_reply(message, user_id):
+async def calculate_and_reply(message, user_id):
     data = users[user_id]
 
     price = data["price"]
@@ -151,12 +151,13 @@ def calculate_and_reply(message, user_id):
         f"Введите новую цену:"
     )
 
-    asyncio.create_task(message.answer(text))
+    await message.answer(text)
 
 
 async def main():
     print("🚀 BOT STARTED")
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
