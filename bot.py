@@ -172,7 +172,16 @@ async def calculator(message: types.Message):
     await message.answer(
         f"💰 Прибыль: {profit:.0f} ₽\n"
         f"📈 Маржа: {margin:.1f}%\n\n"
-        f"{'🔥 PRO режим' if user['pro'] else f'Осталось: {FREE_LIMIT-user['used_today']}'}"
+        if user["pro"]:
+    status_text = "🔥 PRO режим"
+else:
+    remaining = FREE_LIMIT - user["used_today"]
+    status_text = f"Осталось: {remaining}"
+
+await message.answer(
+    f"💰 Прибыль: {profit:.0f} ₽\n"
+    f"📈 Маржа: {margin:.1f}%\n\n"
+    f"{status_text}"
     )
 
 
@@ -187,3 +196,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
