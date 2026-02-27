@@ -11,14 +11,13 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Храним временные данные пользователей
 users = {}
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     users[message.from_user.id] = {"step": "price"}
     await message.answer(
-        "📊 WB Калькулятор прибыли\n\n"
+        "📊 WB PRO Калькулятор\n\n"
         "Введите цену продажи товара (₽):"
     )
 
@@ -32,7 +31,7 @@ async def calculator(message: types.Message):
 
     step = users[user_id]["step"]
 
-    # Шаг 1 — цена
+    # ШАГ 1 — ЦЕНА
     if step == "price":
         try:
             users[user_id]["price"] = float(message.text.replace(",", "."))
@@ -44,7 +43,7 @@ async def calculator(message: types.Message):
         await message.answer("Введите себестоимость товара (₽):")
         return
 
-    # Шаг 2 — себестоимость
+    # ШАГ 2 — СЕБЕСТОИМОСТЬ
     if step == "cost":
         try:
             users[user_id]["cost"] = float(message.text.replace(",", "."))
@@ -56,7 +55,7 @@ async def calculator(message: types.Message):
         await message.answer("Введите комиссию WB (%):")
         return
 
-    # Шаг 3 — комиссия
+    # ШАГ 3 — КОМИССИЯ
     if step == "commission":
         try:
             commission_percent = float(message.text.replace(",", "."))
@@ -67,18 +66,40 @@ async def calculator(message: types.Message):
         price = users[user_id]["price"]
         cost = users[user_id]["cost"]
 
+        # ===== РАСЧЁТЫ =====
         commission = price * commission_percent / 100
         acquiring = price * 0.02
         tax = price * 0.06
         logistics = 150
 
-        profit = price - commission - acquiring - tax - logistics - cost
-        margin = (profit / cost * 100) if cost > 0 else 0
+        total_expenses = commission + acquiring + tax + logistics + cost
+        profit = price - total_expenses
+        margin = (profit / price * 100) if price > 0 else 0
+
+        investments = cost + logistics
+        roi = (profit / investments * 100) if investments > 0 else 0
+
+        # Точка безубыточности
+        fixed_costs = cost + logistics
+        percent_costs = commission_percent / 100 + 0.02 + 0.06
+        breakeven_price = fixed_costs / (1 - percent_costs)
+
+        # ===== ОЦЕНКА =====
+        if profit <= 0:
+            verdict = "❌ Проект убыточен"
+        elif roi < 20:
+            verdict = "⚠️ Низкий ROI — риск"
+        else:
+            verdict = "✅ Можно заходить"
 
         await message.answer(
+            f"📊 WB PRO расчёт\n\n"
             f"💰 Прибыль: {profit:.0f} ₽\n"
-            f"📈 Маржа: {margin:.1f}%\n\n"
-            "Введите новую цену для следующего расчёта:"
+            f"📈 Маржа: {margin:.1f}%\n"
+            f"🚀 ROI: {roi:.1f}%\n"
+            f"🎯 Точка 0: {breakeven_price:.0f} ₽\n\n"
+            f"{verdict}\n\n"
+            f"Введите новую цену для следующего расчёта:"
         )
 
         users[user_id]["step"] = "price"
