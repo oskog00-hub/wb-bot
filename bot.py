@@ -1,178 +1,159 @@
 import asyncio
 import os
-import uuid
+import aiosqlite
 from datetime import date
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-
-from yookassa import Payment, Configuration
-
-# ================= ENV =================
+from aiogram import Bot, Dispatcher
+from aiogram.filters import CommandStart
+from aiogram.types import Message
 
 TOKEN = os.getenv("TOKEN")
-SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
-SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 
 if not TOKEN:
     raise ValueError("TOKEN NOT FOUND")
 
-if not SHOP_ID or not SECRET_KEY:
-    raise ValueError("YOOKASSA CREDENTIALS NOT FOUND")
-
-Configuration.account_id = SHOP_ID
-Configuration.secret_key = SECRET_KEY
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+DB = "users.db"
 FREE_LIMIT = 3
-PRO_PRICE = 490
 
-users = {}
-
-# ================= HELPERS =================
-
-def ensure_user(user_id):
-    if user_id not in users:
-        users[user_id] = {
-            "pro": False,
-            "used_today": 0,
-            "last_date": str(date.today()),
-            "payment_id": None
-        }
-
-    today = str(date.today())
-    if users[user_id]["last_date"] != today:
-        users[user_id]["used_today"] = 0
-        users[user_id]["last_date"] = today
+# твой Telegram ID
+ADMIN_ID = 804249688
 
 
-def pro_keyboard():
-    kb = InlineKeyboardBuilder()
-    kb.button(text="💳 Купить PRO", callback_data="buy_pro")
-    return kb.as_markup()
+async def init_db():
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS users(
+            user_id INTEGER PRIMARY KEY,
+            used_today INTEGER DEFAULT 0,
+            last_reset TEXT
+        )
+        """)
+        await db.commit()
 
-# ================= START =================
 
-@dp.message(Command("start"))
-async def start_handler(message: types.Message):
-    user_id = message.from_user.id
-    ensure_user(user_id)
+async def check_limit(user_id):
 
-    await message.answer(
-        "📊 WB Калькулятор\n\n"
-        "3 расчёта в день бесплатно\n"
-        "PRO — без ограничений",
-        reply_markup=pro_keyboard()
+    if user_id == ADMIN_ID:
+        return True
+
+    today = date.today().isoformat()
+
+    async with aiosqlite.connect(DB) as db:
+
+        cur = await db.execute(
+            "SELECT used_today,last_reset FROM users WHERE user_id=?",
+            (user_id,)
+        )
+
+        user = await cur.fetchone()
+
+        if not user:
+
+            await db.execute(
+                "INSERT INTO users(user_id,used_today,last_reset) VALUES(?,?,?)",
+                (user_id, 0, today)
+            )
+
+            await db.commit()
+            return True
+
+        used, last = user
+
+        if last != today:
+
+            await db.execute(
+                "UPDATE users SET used_today=0,last_reset=? WHERE user_id=?",
+                (today, user_id)
+            )
+
+            await db.commit()
+
+            used = 0
+
+        if used >= FREE_LIMIT:
+            return False
+
+        await db.execute(
+            "UPDATE users SET used_today=used_today+1 WHERE user_id=?",
+            (user_id,)
+        )
+
+        await db.commit()
+
+        return True
+
+
+@dp.message(CommandStart())
+async def start(message: Message):
+
+    text = (
+        "📊 WB Калькулятор прибыли\n\n"
+        "Введите:\n"
+        "Цена Себестоимость Комиссия%\n\n"
+        "Пример:\n"
+        "2000 800 15"
     )
 
-# ================= BUY PRO =================
+    await message.answer(text)
 
-@dp.callback_query(lambda c: c.data == "buy_pro")
-async def buy_pro(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    ensure_user(user_id)
-
-    payment = Payment.create({
-        "amount": {
-            "value": str(PRO_PRICE),
-            "currency": "RUB"
-        },
-        "confirmation": {
-            "type": "redirect",
-            "return_url": "https://t.me/"
-        },
-        "capture": True,
-        "description": f"PRO доступ {user_id}"
-    }, uuid.uuid4())
-
-    users[user_id]["payment_id"] = payment.id
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Оплатить", url=payment.confirmation.confirmation_url)],
-        [InlineKeyboardButton(text="✅ Я оплатил", callback_data="check_payment")]
-    ])
-
-    await callback.message.answer(
-        f"🔥 PRO — {PRO_PRICE} ₽\n\n"
-        "После оплаты нажмите «Я оплатил»",
-        reply_markup=keyboard
-    )
-
-    await callback.answer()
-
-# ================= CHECK PAYMENT =================
-
-@dp.callback_query(lambda c: c.data == "check_payment")
-async def check_payment(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    ensure_user(user_id)
-
-    payment_id = users[user_id]["payment_id"]
-
-    if not payment_id:
-        await callback.answer("Платёж не найден", show_alert=True)
-        return
-
-    payment = Payment.find_one(payment_id)
-
-    if payment.status == "succeeded":
-        users[user_id]["pro"] = True
-        await callback.message.answer("🔥 PRO активирован!")
-    else:
-        await callback.message.answer("❌ Платёж ещё не подтверждён")
-
-    await callback.answer()
-
-# ================= CALCULATOR =================
 
 @dp.message()
-async def calculator(message: types.Message):
+async def calculator(message: Message):
+
     user_id = message.from_user.id
-    ensure_user(user_id)
 
-    user = users[user_id]
+    allowed = await check_limit(user_id)
 
-    try:
-        price = float(message.text.replace(",", "."))
-    except:
-        await message.answer("Введите цену числом")
+    if not allowed:
+
+        await message.answer(
+            "🚫 Лимит 3 расчёта в день\n\n"
+            "Купите PRO чтобы снять лимит."
+        )
+
         return
 
-    if not user["pro"]:
-        if user["used_today"] >= FREE_LIMIT:
-            await message.answer(
-                "⛔ Лимит бесплатных расчётов исчерпан.\n"
-                "Оформите PRO."
-            )
-            return
-        user["used_today"] += 1
+    try:
 
-    # Простейшая модель расчёта
-    cost = price * 0.7
-    profit = price - cost
-    margin = (profit / price) * 100
+        price, cost, commission = map(float, message.text.split())
 
-    if user["pro"]:
-        status_text = "🔥 PRO режим"
-    else:
-        remaining = FREE_LIMIT - user["used_today"]
-        status_text = f"Осталось: {remaining}"
+    except:
 
-    await message.answer(
+        await message.answer(
+            "Введите данные так:\n\n"
+            "2000 800 15"
+        )
+
+        return
+
+    commission_value = price * commission / 100
+
+    profit = price - cost - commission_value
+    margin = profit / price * 100
+    roi = profit / cost * 100
+
+    result = (
+        f"📊 Результат\n\n"
         f"💰 Прибыль: {profit:.0f} ₽\n"
-        f"📈 Маржа: {margin:.1f}%\n\n"
-        f"{status_text}"
+        f"📈 Маржа: {margin:.1f}%\n"
+        f"🚀 ROI: {roi:.1f}%"
     )
 
-# ================= MAIN =================
+    await message.answer(result)
+
 
 async def main():
+
+    await init_db()
+
     print("🚀 BOT STARTED")
+
     await dp.start_polling(bot)
 
+
 if __name__ == "__main__":
+
     asyncio.run(main())
